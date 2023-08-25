@@ -8,7 +8,7 @@
 const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
-const path = require('path');
+const converter = require('./uuidConverter');
 
 const app = express();
 
@@ -34,21 +34,43 @@ const pool = mysql.createPool({
 
 app.post('/newuser', (req, res, next) => {
     /*
-     * request device: android
-     * func: 앱에서 지정한 유저 이름을 users에 저장
-     * response: userId
-     */
-    const data = req.body;
+    * request device: android
+    * func: 앱에서 지정한 유저 이름을 users에 저장
+    * response: 200 -> Json(id, String), error -> String
+    */
+    const data = req.query;
+    console.log(data);
     const username = data.username;
+    if(username === undefined) {
+        return res.status(400).send('username is required.');
+    }
 
-    const query = 'INSERT INTO users (username) VALUES (?)';
+    const query = 'INSERT INTO users (user_name) VALUES (?)';
 
-    connection.query(query, [username], (err, result) => {
+    pool.query(query, [username], (err, result) => {
         if (err) {
-            console.error('Error inserting username:', err);
-            res.status(500).send('Error inserting username into the database');
+            // 중복된 username 때문에 오류가 발생한 경우
+            if (err.code === 'ER_DUP_ENTRY') {
+                // 해당 user_name에 대한 user_id를 조회
+                pool.query('SELECT user_id FROM users WHERE user_name = ?', [username], (error2, results2) => {
+                    if (error2) {
+                        console.error('Error fetching user id:', error2);
+                        res.status(500).send('Error fetching user id from the database');
+                    } else {
+                        let userId = results2[0].user_id;
+                        res.status(200).json({
+                            message: 'User already exists',
+                            id: userId
+                        });
+                    }
+                });
+            } else {
+                // 그 외의 오류
+                res.status(500).send('Error inserting username into the database');
+            }
         } else {
-            res.json({
+            // INSERT 성공
+            res.status(200).json({
                 message: 'Username successfully added!',
                 id: result.insertId
             });
@@ -56,33 +78,40 @@ app.post('/newuser', (req, res, next) => {
     });
 });
 
+
 app.post('/newplant', (req, res, next) => {
     /*
      * request device: android
      * func: userId와 plantname을 plants에 저장
-     * response:
+     * response: 200 -> Json(id, String), error -> String
      */
-    const data = req.body;
+    const data = req.query;
 
     const userId = data.userId;
+    const plantId = data.plantId; // string format
     const plantname = data.plantname;
+    console.log(data);
     if (userId === undefined || plantname === undefined) {
         return res.status(400).send('Both "userid" and "plantname" are required.');
     }
 
+    // Convert the string format plantId to a byte array
+    const plantIdBytes = converter.uuidToBytes(plantId);
+
     // Insert the new plant for the user
-    pool.query('INSERT INTO plants (plant_name, user_id) VALUES (?, ?)', [plantname, userId], (error, results, fields) => {
-        if (err) {
-            console.error('Error inserting username:', err);
-            res.status(500).send('Error inserting username into the database');
+    pool.query('INSERT INTO plants (plant_id, plant_name, user_id) VALUES (?, ?, ?)', [plantIdBytes, plantname, userId], (error, results, fields) => {
+        if (error) {
+            console.error('Error inserting plant:', error);
+            res.status(500).send('Error inserting plant into the database');
         } else {
-            res.json({
-                message: 'Plant added with ID: ' + results.insertId,
-                id: result.insertId
+            res.status(200).json({
+                message: 'Plant successfully added!',
+                id: plantId
             });
         }
     });
 });
+
 
 app.post('/data', (req, res, next) => {
     /*
