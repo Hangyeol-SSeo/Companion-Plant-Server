@@ -11,11 +11,13 @@ const bodyParser = require('body-parser');
 const converter = require('./uuidConverter');
 
 const app = express();
-
 const port = 3000;
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+
+// Global variables
+var isLightOn;
 
 // MySQL 데이터베이스 연결 정보 설정
 // const connection = mysql.createConnection({
@@ -28,9 +30,13 @@ const pool = mysql.createPool({
     connectionLimit: 10, // 동시에 사용될 최대 연결 수
     host: 'localhost',
     user: 'root',
-    password: 'dltprPdkdlehf',
+    password: 'admin',
     database: 'plant_db'
 });
+
+/*
+--------------------- Android ---------------------
+ */
 
 app.post('/newuser', (req, res, next) => {
     /*
@@ -90,7 +96,6 @@ app.post('/newplant', (req, res, next) => {
     const userId = data.userId;
     const plantId = data.plantId; // string format
     const plantname = data.plantname;
-    console.log(data);
     if (userId === undefined || plantname === undefined) {
         return res.status(400).send('Both "userid" and "plantname" are required.');
     }
@@ -104,6 +109,7 @@ app.post('/newplant', (req, res, next) => {
             console.error('Error inserting plant:', error);
             res.status(500).send('Error inserting plant into the database');
         } else {
+            console.log(userId, plantId, plantname);
             res.status(200).json({
                 message: 'Plant successfully added!',
                 id: plantId
@@ -112,6 +118,95 @@ app.post('/newplant', (req, res, next) => {
     });
 });
 
+app.post('/rmplant', (req, res, next) => {
+    /*
+     * request device: android
+     * func: plantId를 받아 plant를 삭제
+     * response: 200 -> Json(id, String), error -> String
+     */
+    const data = req.query;
+
+    const plantId = data.plantId;
+    if (plantId === undefined) {
+        return res.status(400).send('"plantId" is required.');
+    }
+    const plantIdBytes = converter.uuidToBytes(plantId);
+
+    // remove plant from database
+    pool.query('DELETE FROM plants WHERE (plant_id) = ?', [plantIdBytes], (error, results, fields) => {
+        if (error) {
+            console.error('Error removing plant:', error);
+            res.status(500).send('Error remove plant from the database');
+        } else {
+            console.log(plantId);
+            res.status(200).json({
+                message: 'Plant successfully removed!',
+                id: plantId
+            });
+        }
+    });
+});
+
+app.post('/state', (req, res, next) => {
+    /*
+     * request device: android
+     * func: 식물 생장 빛 on, off 여부 확인 및 저장
+     * response: 200 -> x, error -> String
+     */
+    const data = req.query;
+
+    const isChecked = data.status;
+    if (isChecked === undefined) {
+        return res.status(400).send('No status');
+    }
+    isLightOn = isChecked;
+});
+
+app.get('/data', (req, res, next) => {
+    /*
+     * request device: android
+     * func: 지정한 식물 환경 데이터를 android device로 전달
+     * response: 200 -> Json, error -> String
+     */
+    const data = req.query;
+
+    // 유저와 식물 정보 가져오기
+    const plantId = data.plantId;
+
+    if (plantId === undefined) {
+        return res.status(400).send('"plantId" is required.');
+    }
+    const plantIdBytes = converter.uuidToBytes(plantId);
+
+    const query = `
+        SELECT (temperature, humidity, soil_moisture, light_intensity, recorded_time)
+        FROM plant_environment_data
+        WHERE plant_id = ?
+        ORDER BY recorded_time DESC LIMIT 1
+    `;
+
+
+    pool.query(query, plantIdBytes, (error, results, fields) => {
+        if (error) {
+            console.error("Database connection error:", error);
+            return next(error);
+        } else {
+            const result = results[0];
+            console.log(result.temperature);
+            res.status(200).json({
+                temperature: result.temperature,
+                humidity: result.humidity,
+                soil_moisture: result.soil_moisture,
+                light_intensity: result.light_intensity,
+                recorded_time: result.recorded_time
+            });
+        }
+    });
+});
+
+/*
+--------------------- Raspberry Pi ---------------------
+ */
 
 app.post('/data', (req, res, next) => {
     /*
@@ -122,60 +217,44 @@ app.post('/data', (req, res, next) => {
      * func: instance 저장
      * response: x
      */
-
-    const data = req.body;
+    const data = req.query;
 
     // 유저와 식물 정보 가져오기
-    const plantname = data.plantname;
+    const plantId = data.plantId;
 
-    if (plantname === undefined) {
-        return res.status(400).send('"plantname" is required.');
+    if (plantId === undefined) {
+        return res.status(400).send('"plantId" is required.');
     }
 
-    // 1. Fetch the plant_id based on the given plantname
-    pool.query('SELECT plant_id FROM plants WHERE plant_name = ?', [plantname], (error, results, fields) => {
+    // 2. Insert the environment data for the plant
+    const query = `
+        INSERT INTO plant_environment_data
+            (plant_id, temperature, humidity, soil_moisture, light_intensity)
+        VALUES (?, ?, ?, ?, ?)
+    `;
+
+    const values = [
+        plantId,
+        data.temperature,
+        data.humidity,
+        data.soil_moisture,
+        data.light_intensity,
+    ];
+
+    pool.query(query, values, (error, results, fields) => {
         if (error) {
             console.error("Database connection error:", error);
             return next(error);
         }
 
-        // If the plant doesn't exist, send an error response.
-        if (results.length === 0) {
-            return res.status(400).send('Plant does not exist.');
-        }
-
-        // The plant exists, so grab the plant_id
-        const plantId = results[0].plant_id;
-
-        // 2. Insert the environment data for the plant
-        const query = `
-            INSERT INTO plant_environment_data 
-            (plant_id, temperature, humidity, soil_moisture, light_intensity) 
-            VALUES (?, ?, ?, ?, ?)
-        `;
-
-        const values = [
-            plantId,
-            data.temperature,
-            data.humidity,
-            data.soil_moisture,
-            data.light_intensity,
-        ];
-
-        pool.query(query, values, (error, results, fields) => {
-            if (error) {
-                console.error("Database connection error:", error);
-                return next(error);
-            }
-
-            res.status(200).send('Database save complete!');
-        });
+        res.status(200).send('Database save complete!');
     });
 });
 
 
-app.post('/state', (req, res, next) => {
-
+app.get('/state', (req, res, next) => {
+    // isLightOn 값 전달
+    res.send(isLightOn);
 });
 
 app.use(function (err, req, res, next) {
