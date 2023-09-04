@@ -159,6 +159,7 @@ app.post('/state', (req, res, next) => {
     if (isChecked === undefined) {
         return res.status(400).send('No status');
     }
+    console.log('light state changed');
     isLightOn = isChecked;
 });
 
@@ -179,7 +180,7 @@ app.get('/data', (req, res, next) => {
     const plantIdBytes = converter.uuidToBytes(plantId);
 
     const query = `
-        SELECT (temperature, humidity, soil_moisture, light_intensity, recorded_time)
+        SELECT temperature, humidity, soil_moisture, light_intensity, recorded_time
         FROM plant_environment_data
         WHERE plant_id = ?
         ORDER BY recorded_time DESC LIMIT 1
@@ -226,7 +227,6 @@ app.post('/data', (req, res, next) => {
         return res.status(400).send('"plantId" is required.');
     }
 
-    // 2. Insert the environment data for the plant
     const query = `
         INSERT INTO plant_environment_data
             (plant_id, temperature, humidity, soil_moisture, light_intensity)
