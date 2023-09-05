@@ -9,6 +9,7 @@ const express = require('express');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
 const converter = require('./uuidConverter');
+const {uuidToBytes} = require("./uuidConverter");
 
 const app = express();
 const port = 3000;
@@ -234,7 +235,7 @@ app.post('/data', (req, res, next) => {
     `;
 
     const values = [
-        plantId,
+        uuidToBytes(plantId),
         data.temperature,
         data.humidity,
         data.soil_moisture,
