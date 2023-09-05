@@ -159,7 +159,7 @@ app.post('/state', (req, res, next) => {
     if (isChecked === undefined) {
         return res.status(400).send('No status');
     }
-    console.log('light state changed');
+    console.log(isChecked);
     isLightOn = isChecked;
 });
 
@@ -218,7 +218,7 @@ app.post('/data', (req, res, next) => {
      * func: instance 저장
      * response: x
      */
-    const data = req.query;
+    const data = req.body;
 
     // 유저와 식물 정보 가져오기
     const plantId = data.plantId;
