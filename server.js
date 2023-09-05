@@ -30,7 +30,7 @@ const pool = mysql.createPool({
     connectionLimit: 10, // 동시에 사용될 최대 연결 수
     host: 'localhost',
     user: 'root',
-    password: 'admin',
+    password: 'dltprPdkdlehf',
     database: 'plant_db'
 });
 
