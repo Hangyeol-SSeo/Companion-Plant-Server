@@ -230,17 +230,20 @@ app.post('/data', (req, res, next) => {
 
     const query = `
         INSERT INTO plant_environment_data
-            (plant_id, temperature, humidity, soil_moisture, light_intensity)
-        VALUES (?, ?, ?, ?, ?)
+            (plant_id, temperature, humidity, soil_moisture, light_intensity, light_retention_time)
+        VALUES (?, ?, ?, ?, ?, ?)
     `;
 
+    // TODO: 라즈베리파이에서 ligtt hours 변수명 조정하기
+    // TODO: emotion값 전달?
     const values = [
         uuidToBytes(plantId),
         data.temperature,
         data.humidity,
         data.soil_moisture,
         data.light_intensity,
-    ];
+        `${data.light_hours}:${data.light_min}:${data.light_sec}`
+    ];l
 
     pool.query(query, values, (error, results, fields) => {
         if (error) {

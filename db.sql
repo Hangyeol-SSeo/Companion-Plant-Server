@@ -21,6 +21,7 @@ CREATE TABLE plant_environment_data (
     humidity DECIMAL(5,2),
     soil_moisture DECIMAL(5,2),
     light_intensity DECIMAL(5,2),
+    light_retention_time TIME,
     recorded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (plant_id) REFERENCES plants(plant_id)
 );
