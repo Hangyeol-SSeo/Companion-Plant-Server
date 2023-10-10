@@ -181,12 +181,11 @@ app.get('/data', (req, res, next) => {
     const plantIdBytes = converter.uuidToBytes(plantId);
 
     const query = `
-        SELECT temperature, humidity, soil_moisture, light_intensity, recorded_time
+        SELECT temperature, humidity, soil_moisture, light_intensity, light_retention_time, recorded_time
         FROM plant_environment_data
         WHERE plant_id = ?
         ORDER BY recorded_time DESC LIMIT 1
     `;
-
 
     pool.query(query, plantIdBytes, (error, results, fields) => {
         if (error) {
@@ -200,6 +199,7 @@ app.get('/data', (req, res, next) => {
                 humidity: result.humidity,
                 soil_moisture: result.soil_moisture,
                 light_intensity: result.light_intensity,
+                light_retention_time: result.light_retention_time,
                 recorded_time: result.recorded_time
             });
         }
@@ -243,7 +243,7 @@ app.post('/data', (req, res, next) => {
         data.soil_moisture,
         data.light_intensity,
         `${data.light_hours}:${data.light_min}:${data.light_sec}`
-    ];l
+    ];
 
     pool.query(query, values, (error, results, fields) => {
         if (error) {
